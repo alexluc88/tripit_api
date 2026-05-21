@@ -19,11 +19,14 @@ from playwright.sync_api import TimeoutError as PWTimeout
 
 from .browser import Session
 
-ALERT_NAME_SEL = "#alertName"
-SEND_TEST_EMAIL_SEL = "#sendTestEmail-0"
-CREATE_BTN_SEL = 'button[type="submit"]:has-text("Create Alert")'
-REVEAL_SEL = ('button:has-text("Set Alert"), button:has-text("Create Seat Alert"), '
-              'button:has-text("Seat Alert")')
+# The seat-map page renders mobile + desktop + print copies of the alert panel,
+# so several elements share each id; always act on the :visible one.
+ALERT_NAME_SEL = "#alertName:visible"
+SEND_TEST_EMAIL_SEL = "#sendTestEmail-0:visible"
+CREATE_BTN_SEL = 'button[type="submit"]:has-text("Create Alert"):visible'
+# Clicking "Seat Alert" enters alert mode: it reveals the form AND flips each
+# seat's aria-disabled to false so the seats become selectable.
+REVEAL_NAME = "Seat Alert"
 COOKIE_ACCEPT_SEL = "#onetrust-accept-btn-handler"
 DELETE_BTN_SEL = 'button[title="Delete Alert"]'
 LIMIT_TEXT_SEL = ('text=/Alert Limit Reached/i, text=/Max alerts reached/i, '
@@ -47,17 +50,28 @@ def _dismiss_cookies(page) -> None:
         pass
 
 
+def _first_visible(loc):
+    for i in range(loc.count()):
+        el = loc.nth(i)
+        try:
+            if el.is_visible():
+                return el
+        except PWTimeout:
+            continue
+    return None
+
+
 def _reveal_form(page) -> None:
-    name = page.locator(ALERT_NAME_SEL).first
-    if name.count() and name.is_visible():
-        return
-    try:
-        btn = page.locator(REVEAL_SEL).first
-        if btn.count():
+    """Click the visible "Seat Alert" button to enter alert-creation mode."""
+    if page.locator(ALERT_NAME_SEL).count():
+        return  # already revealed
+    btn = _first_visible(page.get_by_role("button", name=REVEAL_NAME))
+    if btn:
+        try:
             btn.click()
-            page.wait_for_timeout(800)
-    except PWTimeout:
-        pass
+            page.wait_for_timeout(1000)
+        except PWTimeout:
+            pass
 
 
 def _select_seats(page, seats: list[str]) -> dict[str, bool]:
@@ -95,7 +109,9 @@ def create_alert(
     """Select seats, name the alert, optionally tick test-email, then submit."""
     page = session.page
     out_dir.mkdir(parents=True, exist_ok=True)
-    page.goto(seatmap_url, wait_until="networkidle")
+    # domcontentloaded + explicit wait is more reliable than networkidle here
+    # (the SPA's analytics keep the network busy).
+    page.goto(seatmap_url, wait_until="domcontentloaded")
     _dismiss_cookies(page)
     try:
         page.wait_for_selector("button[data-seat-id]", timeout=session.settings.timeout_ms)
@@ -106,26 +122,27 @@ def create_alert(
     selected = _select_seats(page, req.seats)
 
     name_filled = False
-    try:
-        if page.locator(ALERT_NAME_SEL).count():
-            page.fill(ALERT_NAME_SEL, req.name)
-            name_filled = True
-    except PWTimeout:
-        pass
-
-    test_email_checked = False
-    if req.send_test_email:
+    name = _first_visible(page.locator("#alertName"))
+    if name:
         try:
-            box = page.locator(SEND_TEST_EMAIL_SEL).first
-            if box.count():
-                box.check()
-                test_email_checked = box.is_checked()
+            name.fill(req.name)
+            name_filled = True
         except PWTimeout:
             pass
 
+    test_email_checked = False
+    if req.send_test_email:
+        box = _first_visible(page.locator("#sendTestEmail-0"))
+        if box:
+            try:
+                box.check()
+                test_email_checked = box.is_checked()
+            except PWTimeout:
+                pass
+
     limit_reached = _limit_reached(page)
-    submit = page.locator(CREATE_BTN_SEL).first
-    submit_enabled = bool(submit.count()) and submit.is_enabled()
+    submit = _first_visible(page.locator('button[type="submit"]:has-text("Create Alert")'))
+    submit_enabled = bool(submit) and submit.is_enabled()
 
     base = {
         "selected_seats": selected,
@@ -164,12 +181,12 @@ def delete_alert(session: Session, alerts_url: str, out_dir: Path,
     """
     page = session.page
     out_dir.mkdir(parents=True, exist_ok=True)
-    page.goto(alerts_url, wait_until="networkidle")
+    page.goto(alerts_url, wait_until="domcontentloaded")
     _dismiss_cookies(page)
-    page.wait_for_timeout(1500)
+    page.wait_for_timeout(2000)
 
-    btn = page.locator(DELETE_BTN_SEL).first
-    found = bool(btn.count())
+    btn = _first_visible(page.locator(DELETE_BTN_SEL)) or page.locator(DELETE_BTN_SEL).first
+    found = bool(page.locator(DELETE_BTN_SEL).count())
     if not confirm or not found:
         shot = out_dir / "delete_preview.png"
         page.screenshot(path=str(shot), full_page=True)
