@@ -1,0 +1,15 @@
+{
+  "name": "alaska-booking-tooling",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Local tooling for the alaska-booking skill: one-time login + account scrape.",
+  "type": "commonjs",
+  "scripts": {
+    "login": "node save_session.js",
+    "scrape": "node scrape_alaska_account.js"
+  },
+  "dependencies": {
+    "js-yaml": "^4.1.0",
+    "playwright": "^1.49.0"
+  }
+}

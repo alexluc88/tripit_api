@@ -1,0 +1,17 @@
+# Playwright saved sessions — contain live auth cookies. NEVER commit.
+storage-state-*.json
+
+# Scraped traveler data — PII. NEVER commit.
+travelers/*.yaml
+travelers/*.yml
+
+# Debug artifacts from scrape runs (screenshots + raw HTML dumps)
+out/
+
+# Secrets / encrypted side files
+secrets/
+*.enc
+.env
+
+# Node
+node_modules/
