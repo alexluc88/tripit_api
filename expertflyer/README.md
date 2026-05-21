@@ -20,7 +20,8 @@ seatmap ──► (you describe what you want) ──► preview ──► you c
 | Login (Auth0 email/password) | **Verified** live | `input[name=email]`, `input[name=password]`, `button[name=submit]` |
 | Seat-map extraction | **Verified** live (AS331 SEA-ABQ) | Seats are `button[data-seat-id]`; state from `aria-label` ("Seat 6A, occupied"). 163 seats parsed, states + window/aisle/middle correct. |
 | Preview rendering | **Verified** live | Highlights align pixel-accurately on the real screenshot. |
-| Seat-alert creation | **Partly verified** | Form is embedded on the seat-map page (`#alertName` + "Create Alert"); selectors confirmed in the DOM. The final submit could **not** be exercised because the test account hit its plan's active-alert limit (see below). |
+| Seat-alert creation | **Verified** live (created an active alert) | Embedded on the seat-map page. Click "Seat Alert" to enter alert mode (this enables the seats), tap seats, fill `#alertName`, optionally tick `#sendTestEmail-0`, click "Create Alert". The panel renders mobile/desktop/print copies, so the code targets the `:visible` one. |
+| Seat-alert deletion | **Verified** live | `button[title="Delete Alert"]` on the saved-alerts page (loads async, so the code waits for it). |
 
 ### Plan limits matter
 
