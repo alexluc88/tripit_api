@@ -75,11 +75,24 @@ def cmd_create_alert(args, settings: Settings) -> int:
     req = AlertRequest(
         name=args.name,
         seats=args.seats.split(",") if args.seats else [],
+        send_test_email=args.test_email,
     )
     with open_session(settings) as session:
         login(session)
         result = create_alert(session, args.url, req, settings.out_dir,
                               dry_run=not args.confirm)
+    _emit(result)
+    return 0
+
+
+def cmd_delete_alert(args, settings: Settings) -> int:
+    from .auth import login
+    from .browser import open_session
+    from .alert import delete_alert
+
+    with open_session(settings) as session:
+        login(session)
+        result = delete_alert(session, args.url, settings.out_dir, confirm=args.confirm)
     _emit(result)
     return 0
 
@@ -137,9 +150,18 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--url", required=True, help="Seat-map page URL (alerts are created there)")
     sp.add_argument("--name", required=True, help="Alert name (required by ExpertFlyer)")
     sp.add_argument("--seats", required=True, help="Comma-separated seats to watch, e.g. 6C,7C")
+    sp.add_argument("--test-email", action="store_true",
+                    help='Tick "Have a test email of this alert sent"')
     sp.add_argument("--confirm", action="store_true",
                     help="Actually submit (default is a dry-run that selects + screenshots)")
     sp.set_defaults(func=cmd_create_alert)
+
+    sp = sub.add_parser("delete-alert", help="Delete an existing alert (from saved-alerts page)")
+    sp.add_argument("--url", default="https://www.expertflyer.com/alerts?type=SEAT_MAP&status=ACTIVE",
+                    help="Saved-alerts page URL")
+    sp.add_argument("--confirm", action="store_true",
+                    help="Actually delete (default only locates the control + screenshots)")
+    sp.set_defaults(func=cmd_delete_alert)
 
     sp = sub.add_parser("dump-dom", help="Save HTML/screenshot/elements of a page for tuning")
     sp.add_argument("--url", required=True)
