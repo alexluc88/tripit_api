@@ -183,7 +183,11 @@ def delete_alert(session: Session, alerts_url: str, out_dir: Path,
     out_dir.mkdir(parents=True, exist_ok=True)
     page.goto(alerts_url, wait_until="domcontentloaded")
     _dismiss_cookies(page)
-    page.wait_for_timeout(2000)
+    # The saved-alerts table loads asynchronously; wait for a row's delete button.
+    try:
+        page.wait_for_selector(DELETE_BTN_SEL, timeout=session.settings.timeout_ms)
+    except PWTimeout:
+        page.wait_for_timeout(2000)
 
     btn = _first_visible(page.locator(DELETE_BTN_SEL)) or page.locator(DELETE_BTN_SEL).first
     found = bool(page.locator(DELETE_BTN_SEL).count())
