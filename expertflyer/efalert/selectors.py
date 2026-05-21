@@ -23,36 +23,32 @@ AUTHED_MARKERS = [
     'text=/my account/i',
 ]
 
-# --- Seat map page (NEEDS VERIFICATION) -------------------------------------
-# The seat-map extractor (seatmap.py) is geometry-based and mostly selector-free:
-# it scans for elements whose visible label looks like a seat (e.g. "12A") and
-# reads availability from class/aria/title text. These selectors only narrow the
-# search root and identify the legend; tune them with dump-dom output.
+# --- Seat map page (VERIFIED against AS331 SEA-ABQ) -------------------------
+# Each seat is <button data-seat-id="6A" aria-label="Seat 6A, occupied" ...>.
+# The extractor reads the label from data-seat-id and the state from the text
+# after the comma in aria-label. If data-seat-id is absent (other markup), it
+# falls back to a generic label-regex scan. Tune with dump-dom output.
 SEATMAP = {
-    # Container the seat grid lives in. Falls back to <body> if not found.
-    "map_root": '[class*="seatmap" i], [class*="seat-map" i], [data-testid*="seatmap" i]',
-    # Individual seat cells. The extractor also auto-detects by label regex.
-    "seat_cell": '[class*="seat" i]',
-    # Legend rows explaining what each colour/symbol means.
+    # Primary, exact seat selector. Seats render async, so we wait on this.
+    "seat_cell": "button[data-seat-id]",
+    "seat_id_attr": "data-seat-id",
+    # Legend panel (best-effort; the extractor also derives a legend from the
+    # distinct seat states it actually observed, which is more reliable).
     "legend_root": '[class*="legend" i], [aria-label*="legend" i]',
-    "legend_item": '[class*="legend" i] li, [class*="legend" i] [class*="item" i]',
 }
 
-# Tokens (checked against a seat element's class/aria/title, lowercased) that
-# indicate the seat is bookable. Order matters: "unavailable"/"occupied" win.
+# Tokens (checked against a seat's state + aria-label, lowercased). Unavailable
+# wins ties, so unknown states default to "not bookable" (safe for alerts).
 SEAT_AVAILABLE_TOKENS = ["available", "open", "free", "vacant", "selectable", "empty"]
 SEAT_UNAVAILABLE_TOKENS = [
-    "unavailable", "occupied", "taken", "blocked", "reserved", "sold", "disabled", "no-seat",
+    "unavailable", "occupied", "taken", "blocked", "reserved", "sold", "no-seat",
 ]
 
-# --- Seat alert form (NEEDS VERIFICATION) -----------------------------------
+# --- Seat alert (VERIFIED) --------------------------------------------------
+# The "Create Seat Alert" panel is embedded on the seat-map page. Seats are
+# selected by clicking their data-seat-id buttons; see alert.py.
 ALERT = {
-    "airline": 'input[name*="airline" i], input[placeholder*="airline" i]',
-    "flight": 'input[name*="flight" i], input[placeholder*="flight" i]',
-    "date": 'input[name*="date" i], input[type="date"]',
-    "from": 'input[name*="origin" i], input[name*="from" i], input[placeholder*="from" i]',
-    "to": 'input[name*="destination" i], input[name*="to" i], input[placeholder*="to" i]',
-    "cabin": 'select[name*="cabin" i], select[name*="class" i]',
-    "seats": 'input[name*="seat" i], textarea[name*="seat" i]',
-    "submit": 'button[type="submit"], button:has-text("Create"), button:has-text("Add Alert")',
+    "name": "#alertName",
+    "submit": 'button[type="submit"]:has-text("Create Alert")',
+    "limit_banner": 'text=/Alert Limit Reached/i',
 }

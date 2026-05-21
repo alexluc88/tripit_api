@@ -73,10 +73,8 @@ def cmd_create_alert(args, settings: Settings) -> int:
     from .alert import AlertRequest, create_alert
 
     req = AlertRequest(
-        airline=args.airline, flight=args.flight, date=args.date,
-        origin=args.origin or "", destination=args.destination or "",
-        cabin=args.cabin or "",
-        seats=args.seats.split(",") if args.seats else None,
+        name=args.name,
+        seats=args.seats.split(",") if args.seats else [],
     )
     with open_session(settings) as session:
         login(session)
@@ -134,17 +132,13 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--out", help="Output preview image path")
     sp.set_defaults(func=cmd_preview)
 
-    sp = sub.add_parser("create-alert", help="Fill (and optionally submit) a seat alert")
-    sp.add_argument("--url", required=True, help="Seat-alert form URL")
-    sp.add_argument("--airline", required=True)
-    sp.add_argument("--flight", required=True)
-    sp.add_argument("--date", required=True, help="YYYY-MM-DD")
-    sp.add_argument("--origin")
-    sp.add_argument("--destination")
-    sp.add_argument("--cabin")
-    sp.add_argument("--seats", help="Comma-separated seats to alert on")
+    sp = sub.add_parser("create-alert",
+                        help="Select seats on a seat map + name an alert (optionally submit)")
+    sp.add_argument("--url", required=True, help="Seat-map page URL (alerts are created there)")
+    sp.add_argument("--name", required=True, help="Alert name (required by ExpertFlyer)")
+    sp.add_argument("--seats", required=True, help="Comma-separated seats to watch, e.g. 6C,7C")
     sp.add_argument("--confirm", action="store_true",
-                    help="Actually submit (default is a dry-run that only fills + screenshots)")
+                    help="Actually submit (default is a dry-run that selects + screenshots)")
     sp.set_defaults(func=cmd_create_alert)
 
     sp = sub.add_parser("dump-dom", help="Save HTML/screenshot/elements of a page for tuning")

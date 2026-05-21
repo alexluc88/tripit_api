@@ -12,10 +12,10 @@ def test_parser_seatmap():
 
 def test_parser_create_alert_defaults_to_dry_run():
     args = build_parser().parse_args(
-        ["create-alert", "--url", "https://x/a", "--airline", "UA",
-         "--flight", "837", "--date", "2026-06-01"]
+        ["create-alert", "--url", "https://x/sm", "--name", "MyAlert", "--seats", "6C,7C"]
     )
     assert args.confirm is False  # safe default: dry-run unless --confirm
+    assert args.seats == "6C,7C"
 
 
 def test_parser_requires_command():

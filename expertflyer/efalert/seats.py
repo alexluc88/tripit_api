@@ -9,6 +9,10 @@ from dataclasses import asdict, dataclass
 
 SEAT_LABEL_RE = re.compile(r"^(\d{1,3})\s*([A-HJ-Z])$")  # airlines skip "I"
 
+# A within-row horizontal gap wider than (typical gap * this) is read as an aisle.
+# Real ExpertFlyer 3-3 maps show an aisle/seat spacing ratio around 1.4.
+AISLE_GAP_RATIO = 1.3
+
 
 @dataclass
 class Seat:
@@ -16,6 +20,7 @@ class Seat:
     row: int            # 12
     column: str         # "A"
     available: bool
+    state: str = ""     # raw state from the page, e.g. available/occupied/blocked
     position: str = ""  # window | middle | aisle (filled by classify_positions)
     # Bounding box in screenshot pixels, used for offline preview rendering.
     x: float = 0.0
@@ -86,7 +91,7 @@ def classify_positions(seats: list[Seat]) -> list[Seat]:
             centres = [s.cx for s in row]
             gaps = [centres[i + 1] - centres[i] for i in range(len(centres) - 1)]
             typical = sorted(gaps)[len(gaps) // 2] or 1.0
-            aisle_after = {i for i, g in enumerate(gaps) if g > typical * 1.6}
+            aisle_after = {i for i, g in enumerate(gaps) if g > typical * AISLE_GAP_RATIO}
         else:
             # No geometry: assume a single aisle in the middle of the row.
             aisle_after = {len(row) // 2 - 1}

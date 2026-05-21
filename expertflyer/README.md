@@ -17,13 +17,18 @@ seatmap ──► (you describe what you want) ──► preview ──► you c
 
 | Part | Status | Notes |
 |------|--------|-------|
-| Login (Auth0 email/password) | **Verified** against the live site | `input[name=email]`, `input[name=password]`, `button[name=submit]` |
-| Seat-map extraction | Best-effort | Markup-agnostic: finds seat-labelled cells by geometry. Tune via `dump-dom`. |
-| Seat-alert form | Best-effort | Field selectors in `efalert/selectors.py` need confirming on a real account. |
+| Login (Auth0 email/password) | **Verified** live | `input[name=email]`, `input[name=password]`, `button[name=submit]` |
+| Seat-map extraction | **Verified** live (AS331 SEA-ABQ) | Seats are `button[data-seat-id]`; state from `aria-label` ("Seat 6A, occupied"). 163 seats parsed, states + window/aisle/middle correct. |
+| Preview rendering | **Verified** live | Highlights align pixel-accurately on the real screenshot. |
+| Seat-alert creation | **Partly verified** | Form is embedded on the seat-map page (`#alertName` + "Create Alert"); selectors confirmed in the DOM. The final submit could **not** be exercised because the test account hit its plan's active-alert limit (see below). |
 
-ExpertFlyer's seat-map and alert pages are behind a paid login that wasn't available
-during development, so those selectors are isolated in `efalert/selectors.py` and can
-be confirmed quickly with the `dump-dom` command (below).
+### Plan limits matter
+
+Seat alerts count against your ExpertFlyer plan's active-alert limit (Free = **1**).
+When the limit is reached, the "Create Alert" button is disabled and an
+"Alert Limit Reached" banner appears; `create-alert` detects this and reports it
+instead of silently failing. To add a new alert you must delete an existing one
+(`/alerts?type=SEAT_MAP&status=ACTIVE`) or upgrade.
 
 > Only **email/password** Auth0 logins can be automated. "Sign in with Google"
 > cannot (Google blocks automated logins). MFA accounts: run with `EF_HEADLESS=false`
@@ -55,10 +60,11 @@ python -m efalert seatmap --url "https://www.expertflyer.com/..."
 python -m efalert preview --seats 12A,12C
 #    -> out/preview.png
 
-# 4) Create the alert. Defaults to a DRY RUN (fills + screenshots, no submit).
-python -m efalert create-alert --url "https://www.expertflyer.com/...alert..." \
-    --airline UA --flight 837 --date 2026-06-01 --cabin Business --seats 12A,12C
-# Add --confirm to actually submit.
+# 4) Create the alert from the seat-map page. Defaults to a DRY RUN
+#    (selects seats + names the alert + screenshots, but does NOT submit).
+python -m efalert create-alert --url "https://www.expertflyer.com/air/seat-map/results?..." \
+    --name "Aisle seats AS331" --seats 6C,7C,8C
+# Add --confirm to actually submit (subject to your plan's alert limit).
 ```
 
 ### Tuning the authenticated-page selectors
