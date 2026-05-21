@@ -1,0 +1,21 @@
+[project]
+name = "asaccount"
+version = "0.1.0"
+description = "Read-only Alaska / Atmos Rewards account scraper driven by Patchright"
+requires-python = ">=3.10"
+dependencies = [
+    "patchright>=1.40",
+]
+
+[project.scripts]
+asaccount = "asaccount.cli:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["asaccount"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
