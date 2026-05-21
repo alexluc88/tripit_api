@@ -1,0 +1,21 @@
+[project]
+name = "tripitcli"
+version = "0.1.0"
+description = "TripIt API client + CLI so Claude can read and edit your TripIt data"
+requires-python = ">=3.9"
+dependencies = [
+    "requests>=2.31",
+]
+
+[project.scripts]
+tripit = "tripitcli.cli:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["tripitcli"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

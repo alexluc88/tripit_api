@@ -102,3 +102,17 @@ Additional documentation
 
 You can get more information from the [API site](http://tripit.github.io/api/doc/v1/index.html)
 
+Claude skills
+-------------
+
+This repo also ships [Claude Code](https://claude.com/claude-code) skills under
+`.claude/skills/`:
+
+- **tripit** — an OAuth-signed CLI (`tripitcli`) that lets Claude read and edit
+  your TripIt data (trips, reservations, points/rewards, profile). See
+  `.claude/skills/tripit/SKILL.md`.
+- **expertflyer-seat-alerts** — browser automation for ExpertFlyer seat alerts.
+
+In Claude Code on the web these are auto-provisioned on session start; locally,
+run the skill's `setup.sh`.
+
