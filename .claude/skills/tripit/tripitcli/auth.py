@@ -11,6 +11,7 @@ stores the access token.
 from __future__ import annotations
 
 import json
+from urllib.parse import quote
 
 from .client import TripItClient
 from .config import Settings
@@ -38,6 +39,7 @@ def start_login(settings: Settings) -> dict:
     })
     authorize_url = (
         f"{settings.web_base}/oauth/authorize?oauth_token={tok['oauth_token']}"
+        f"&oauth_callback={quote(settings.oauth_callback, safe='')}"
     )
     return {
         "authorize_url": authorize_url,

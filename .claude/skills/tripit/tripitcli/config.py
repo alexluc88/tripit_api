@@ -50,6 +50,13 @@ class Settings:
     )
     api_base: str = field(default_factory=lambda: os.getenv("TRIPIT_API_URL", API_BASE).rstrip("/"))
     web_base: str = field(default_factory=lambda: os.getenv("TRIPIT_WEB_URL", WEB_BASE).rstrip("/"))
+    # TripIt shows "Access Request Failed" on /oauth/authorize unless an
+    # oauth_callback is supplied (or a URL was registered with the app). For a
+    # CLI there is no real redirect target; any valid URL works since OAuth 1.0
+    # carries no verifier — the user just lands here after clicking Authorize.
+    oauth_callback: str = field(
+        default_factory=lambda: os.getenv("TRIPIT_OAUTH_CALLBACK", "https://www.tripit.com/")
+    )
     # Enable ONLY behind a TLS-intercepting proxy (e.g. Claude Code on the web).
     insecure_tls: bool = field(default_factory=lambda: _env_bool("TRIPIT_INSECURE_TLS", False))
     timeout: int = field(default_factory=lambda: int(os.getenv("TRIPIT_TIMEOUT", "45")))
