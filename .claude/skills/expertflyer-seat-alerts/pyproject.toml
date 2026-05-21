@@ -1,0 +1,22 @@
+[project]
+name = "efalert"
+version = "0.1.0"
+description = "ExpertFlyer seat-alert automation driven by Playwright"
+requires-python = ">=3.10"
+dependencies = [
+    "playwright>=1.40",
+    "pillow>=10.0",
+]
+
+[project.scripts]
+efalert = "efalert.cli:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["efalert"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
