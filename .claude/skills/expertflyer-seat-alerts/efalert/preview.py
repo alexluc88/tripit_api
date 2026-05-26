@@ -13,8 +13,12 @@ from PIL import Image, ImageDraw, ImageFont
 HIGHLIGHT = (40, 167, 69)      # green outline for the chosen seats
 HIGHLIGHT_FILL = (40, 167, 69, 70)
 MISSING = (220, 53, 69)        # red for requested seats not found on the map
-AVAILABLE = (0, 123, 255)      # blue outline for picker view (every available seat)
-AVAILABLE_FILL = (0, 123, 255, 60)
+# Picker uses bright green = "available, go pick this".
+AVAILABLE = (34, 139, 60)
+AVAILABLE_FILL = (34, 139, 60, 240)
+# Whole-canvas translucent white wash dims the rest of the map so the green
+# tiles read instantly. Tuned to keep occupied-seat shapes visible underneath.
+DIM_WASH = (255, 255, 255, 110)
 
 
 def _index(seats: list[dict]) -> dict[str, dict]:
@@ -96,7 +100,10 @@ def render_picker(seatmap_json: Path | str, out_path: Path | str,
             (cropped.width * scale, cropped.height * scale),
             resample=Image.LANCZOS,
         )
-    overlay = Image.new("RGBA", cropped.size, (0, 0, 0, 0))
+    # First wash the whole crop to dim the occupied seats, then drop opaque
+    # green tiles on top of the available ones — they read as the only "live"
+    # elements on the canvas.
+    overlay = Image.new("RGBA", cropped.size, DIM_WASH)
     draw = ImageDraw.Draw(overlay)
 
     sample_h = sorted(s["height"] for s in available or all_seats)[
@@ -112,9 +119,7 @@ def render_picker(seatmap_json: Path | str, out_path: Path | str,
         sh = seat["height"] * scale
         x0, y0 = sx - pad, sy - pad
         x1, y1 = sx + sw + pad, sy + sh + pad
-        # Solid (opaque) blue fill so the dimmed-out aircraft icon underneath
-        # doesn't compete with the label.
-        draw.rectangle([x0, y0, x1, y1], fill=(0, 123, 255, 235), outline=AVAILABLE,
+        draw.rectangle([x0, y0, x1, y1], fill=AVAILABLE_FILL, outline=AVAILABLE,
                        width=max(2, scale))
         label = seat["label"]
         tb = draw.textbbox((0, 0), label, font=font)
