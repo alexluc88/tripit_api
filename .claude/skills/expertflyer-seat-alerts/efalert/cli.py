@@ -162,7 +162,6 @@ def cmd_candidates(args, settings: Settings) -> int:
     if args.cabin:
         paths.append(settings.out_dir / f"{args.name}_{args.cabin}.json")
     else:
-        # Auto-discover: <name>.json, <name>_*.json
         single = settings.out_dir / f"{args.name}.json"
         if single.exists():
             paths.append(single)
@@ -172,11 +171,18 @@ def cmd_candidates(args, settings: Settings) -> int:
             f"No seat-map JSON found for name={args.name!r} in {settings.out_dir}. "
             "Run `find-flight` or `seatmap` first."
         )
+
+    positions = tuple(p.strip() for p in args.positions.split(",")) if args.positions else None
+    seat_types = tuple(t.strip() for t in args.types.split(",")) if args.types else None
+
     payload: dict[str, dict] = {}
     for p in paths:
-        # Tag each set with the cabin code parsed from the filename (or "default").
         cabin = p.stem[len(args.name) + 1:] if p.stem != args.name else "default"
-        payload[cabin] = load_and_select(p, top_k=args.top)
+        payload[cabin] = load_and_select(
+            p, top_k=args.top,
+            positions=positions, seat_types=seat_types,
+            only_available=not args.include_occupied,
+        )
     _emit({"name": args.name, "cabins": payload})
     return 0
 
@@ -277,6 +283,13 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--name", default="flight", help="Basename used by find-flight/seatmap")
     sp.add_argument("--cabin", help="Cabin letter to read (default: all captured cabins)")
     sp.add_argument("--top", type=int, default=4, help="Top-K per position (default 4)")
+    sp.add_argument("--positions",
+                    help="Comma-separated positions to keep (window,aisle,middle)")
+    sp.add_argument("--types",
+                    help="Comma-separated seat types to keep "
+                         "(standard,premium,paid_premium,exit,accessible)")
+    sp.add_argument("--include-occupied", action="store_true",
+                    help="Include currently-unavailable seats (useful for alert targets)")
     sp.set_defaults(func=cmd_candidates)
 
     sp = sub.add_parser("dump-dom", help="Save HTML/screenshot/elements of a page for tuning")
