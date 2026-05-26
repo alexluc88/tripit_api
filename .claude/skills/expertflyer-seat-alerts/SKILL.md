@@ -43,10 +43,16 @@ Then activate the venv before running commands:
 
 1. **Login** (caches a session cookie):
    `python -m efalert login`
-2. **Capture the seat map.** Ask the user for the seat-map URL (open the flight
-   on expertflyer.com and copy the URL), then:
-   `python -m efalert seatmap --url "<URL>" --name flight`
-   Read `out/flight.png` (view it) and `out/flight.json` (every seat: label,
+2. **Capture the seat map.** Two ways in:
+   - **By flight number** (preferred):
+     `python -m efalert find-flight --airline AS --flight 797 [--date 2026-05-26] [--from SEA --to LAX] --name flight`
+     Resolves the route (Alaska supported automatically; for others pass
+     `--from`/`--to`), drives EF's seat-map form, dedups cabins, and writes
+     `out/flight_<cabin>.{png,json}` for each cabin found (`D`/`F` = First,
+     `C`/`J` = Business, `W` = Premium Economy, `Y` = Economy).
+   - **By URL** (when you already have the EF seat-map link):
+     `python -m efalert seatmap --url "<URL>" --name flight`
+   Read `out/flight*.png` (view it) and `out/flight*.json` (every seat: label,
    `available`, `state`, `position` = window/aisle/middle, plus a bounding box).
 3. **Interpret the request.** Map the user's words ("aisle seat near the front",
    "any premium aisle") to concrete seat labels using `out/flight.json`. Seat
@@ -63,6 +69,7 @@ Then activate the venv before running commands:
 | Command | Purpose |
 |---------|---------|
 | `login [--force]` | Authenticate, cache session |
+| `find-flight --airline X --flight N [--date YYYY-MM-DD] [--from/--to] [--name N] [--no-capture]` | Resolve a flight to seat-map URL(s) and capture each cabin |
 | `seatmap --url U [--name N]` | Screenshot + legend + structured seats |
 | `preview --seats … [--name N] [--out P]` | Highlight chosen seats on the map |
 | `create-alert --url U --name NAME --seats … [--test-email] [--confirm]` | Fill (and with `--confirm`, submit) a seat alert |
@@ -89,36 +96,10 @@ If ExpertFlyer changes its markup, all selectors live in
 `efalert/selectors.py`. Use `dump-dom` on the relevant page to capture the real
 HTML/elements, then adjust. Run `pytest` for the offline unit tests.
 
-## TODO — accept arbitrary flight input
+## Future work
 
-Today the workflow requires the user to paste a seat-map URL. Add a
-`find-flight` command that accepts looser input and resolves it to a seat-map
-URL (or URLs, one per cabin) automatically. The form at
-`https://www.expertflyer.com/air/seat-map` is the right entry point (free on
-all plans, unlike `/air/status` which is Premium-gated).
-
-Inputs to support, in order of usefulness:
-- `--airline AS --flight 797 [--date YYYY-MM-DD] [--time 6:00am]` — most common
-  ask. Needs origin/destination, which the EF seat-map form requires. Resolve
-  the route by hitting a public source (e.g. `alaskaair.com/status/<num>/<date>`
-  worked for AS) before filling the form. If multiple departures match, list
-  them and ask the user to disambiguate by time.
-- `--from SEA --to LAX --airline AS --flight 797 [--date …]` — direct path,
-  skips the route lookup.
-- `--pnr ABC123` (stretch) — pull route + date from a confirmation code.
-
-Implementation notes (working prototype lives at `out/find_seatmap.py`):
-- Goto `/air/seat-map`. Three autocomplete inputs match
-  `input[id^='autocomplete-']` in DOM order: Departing, Arriving, Airline. Type
-  the value, wait ~700ms, then click the first matching `role=option`.
-- Fill `#departDate` (format `MM/DD/YY`) and `#flightNumber`.
-- Tick at least one cabin checkbox (form requires it). Easiest: try
-  `page.get_by_label("First" | "Business" | "Premium Economy" | "Economy")` and
-  swallow the misses. The resulting URL has `cabinClass=` set to whichever the
-  page decides to show; to get a second cabin, replace that query parameter
-  (`Y` for economy, `D` for first observed on AS) and re-capture.
-- Click the `Search` button; the SPA renders inline (no navigation event), so
-  `wait_for_load_state("networkidle")` + a short timeout is enough. The final
-  `page.url` is the canonical seat-map URL — pass it to `capture_seatmap`.
-- The form rejects submission silently if cabins are missing or the date is in
-  the past; surface a clear error in those cases.
+- `find-flight` route lookup is implemented for Alaska Airlines (AS) only.
+  Other carriers require `--from`/`--to`. Add carrier-specific scrapers to
+  `efalert/find_flight.py::lookup_route` as needed.
+- A `--pnr ABC123` mode to pull route + date from a booking reference would
+  remove the last manual step.

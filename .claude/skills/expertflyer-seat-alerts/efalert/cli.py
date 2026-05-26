@@ -97,6 +97,52 @@ def cmd_delete_alert(args, settings: Settings) -> int:
     return 0
 
 
+def cmd_find_flight(args, settings: Settings) -> int:
+    from datetime import date as DateType
+    from .auth import login
+    from .browser import open_session
+    from .find_flight import Route, find_seatmap_urls, lookup_route
+    from .seatmap import capture_seatmap
+
+    if (args.from_ is None) != (args.to is None):
+        raise SystemExit("--from and --to must be given together.")
+    when = DateType.fromisoformat(args.date) if args.date else DateType.today()
+
+    with open_session(settings) as session:
+        login(session)
+        if args.from_ and args.to:
+            route = Route(origin=args.from_.upper(), destination=args.to.upper())
+        else:
+            route = lookup_route(session, args.airline, args.flight, when)
+        urls = find_seatmap_urls(
+            session,
+            origin=route.origin, destination=route.destination,
+            airline=args.airline, flight=args.flight, when=when,
+        )
+        captures: dict[str, dict] = {}
+        if not args.no_capture:
+            for cabin, url in urls.items():
+                data = capture_seatmap(
+                    session, url, settings.out_dir,
+                    name=f"{args.name}_{cabin}",
+                )
+                captures[cabin] = {
+                    "screenshot": data["screenshot"],
+                    "seats_json": str(settings.out_dir / f"{args.name}_{cabin}.json"),
+                    "seat_count": len(data["seats"]),
+                    "available": data["summary"].get("available", 0),
+                }
+    _emit({
+        "route": {"origin": route.origin, "destination": route.destination},
+        "date": when.isoformat(),
+        "airline": args.airline.upper(),
+        "flight": args.flight,
+        "urls": urls,
+        "captures": captures,
+    })
+    return 0
+
+
 def cmd_dump_dom(args, settings: Settings) -> int:
     """Save HTML + screenshot + interactive-element inventory for selector tuning."""
     from .auth import login
@@ -162,6 +208,20 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--confirm", action="store_true",
                     help="Actually delete (default only locates the control + screenshots)")
     sp.set_defaults(func=cmd_delete_alert)
+
+    sp = sub.add_parser(
+        "find-flight",
+        help="Resolve a flight by airline+number to seat-map URL(s) and capture them",
+    )
+    sp.add_argument("--airline", required=True, help="Airline IATA code, e.g. AS")
+    sp.add_argument("--flight", required=True, help="Flight number, e.g. 797")
+    sp.add_argument("--date", help="Departure date YYYY-MM-DD (default: today)")
+    sp.add_argument("--from", dest="from_", help="Origin IATA code (skips route lookup)")
+    sp.add_argument("--to", help="Destination IATA code (skips route lookup)")
+    sp.add_argument("--name", default="flight", help="Output basename")
+    sp.add_argument("--no-capture", action="store_true",
+                    help="Only resolve the URL(s); skip the seat-map capture step")
+    sp.set_defaults(func=cmd_find_flight)
 
     sp = sub.add_parser("dump-dom", help="Save HTML/screenshot/elements of a page for tuning")
     sp.add_argument("--url", required=True)
