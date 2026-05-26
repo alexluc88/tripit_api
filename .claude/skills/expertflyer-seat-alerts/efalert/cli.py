@@ -143,6 +143,17 @@ def cmd_find_flight(args, settings: Settings) -> int:
     return 0
 
 
+def cmd_picker(args, settings: Settings) -> int:
+    """Render the website's seat map with every available seat outlined + labeled."""
+    from .preview import render_picker
+
+    seatmap_json = args.seatmap or (settings.out_dir / f"{args.name}.json")
+    out = args.out or (settings.out_dir / f"{args.name}_picker.png")
+    report = render_picker(seatmap_json, out)
+    _emit(report)
+    return 0
+
+
 def cmd_candidates(args, settings: Settings) -> int:
     """Curate available seats into a chat-UI-friendly shape (window/aisle/middle)."""
     from .candidates import load_and_select
@@ -249,6 +260,15 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--no-capture", action="store_true",
                     help="Only resolve the URL(s); skip the seat-map capture step")
     sp.set_defaults(func=cmd_find_flight)
+
+    sp = sub.add_parser(
+        "picker",
+        help="Annotate a captured seat map: outline every available seat with its label",
+    )
+    sp.add_argument("--name", default="seatmap", help="Basename of the seatmap capture")
+    sp.add_argument("--seatmap", help="Path to seatmap.json (defaults to out/<name>.json)")
+    sp.add_argument("--out", help="Output image path (defaults to out/<name>_picker.png)")
+    sp.set_defaults(func=cmd_picker)
 
     sp = sub.add_parser(
         "candidates",

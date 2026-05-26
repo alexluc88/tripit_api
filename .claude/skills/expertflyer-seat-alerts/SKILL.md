@@ -54,17 +54,17 @@ Then activate the venv before running commands:
      `python -m efalert seatmap --url "<URL>" --name flight`
    Read `out/flight*.png` (view it) and `out/flight*.json` (every seat: label,
    `available`, `state`, `position` = window/aisle/middle, plus a bounding box).
-3. **Curate candidates for the user.** Run
-   `python -m efalert candidates --name flight [--cabin Y] [--top 4]` to get
-   the top available seats grouped by `window` / `aisle` / `middle` for each
-   captured cabin. Pre-filter by the user's stated preferences if any
-   ("first-class aisle near the front", "any window") and confirm cabin choice
-   when row ranges alone are ambiguous.
-4. **Let the user pick in chat.** Call `AskUserQuestion` with
-   `multiSelect: true` (max 4 options per question, up to 4 questions). Pattern:
-   one question per cabin/position group, each option = one candidate seat. The
-   option `label` should be `"<seat> (<cabin> · <window|aisle|middle>)"` so the
-   choice is unambiguous. Skip groups that are empty.
+3. **Show the user a picker.** Run
+   `python -m efalert picker --name flight_<cabin> --out out/<cabin>_picker.png`
+   for each cabin captured. The output is a cropped, upscaled snapshot of the
+   website's own seat layout with every available seat filled blue and labeled
+   in white — the closest chat-native equivalent of EF's clickable seat map.
+   `SendUserFile` the image(s).
+4. **Collect the selection.** Either ask the user to reply with the seat labels
+   they want, or use `AskUserQuestion` with `multiSelect: true` if a short list
+   of curated options helps (use `efalert candidates --name flight` to get the
+   top picks per position). Free-text reply is usually faster when the picker
+   is already on screen.
 5. **Preview and confirm.** `python -m efalert preview --seats 6C,7C,… --name flight`
    then show `out/preview.png` to the user and get explicit approval.
 6. **Create the alert.** Dry-run first (default), review, then submit:
@@ -80,6 +80,7 @@ Then activate the venv before running commands:
 | `find-flight --airline X --flight N [--date YYYY-MM-DD] [--from/--to] [--name N] [--no-capture]` | Resolve a flight to seat-map URL(s) and capture each cabin |
 | `seatmap --url U [--name N]` | Screenshot + legend + structured seats |
 | `candidates --name N [--cabin C] [--top K]` | Top available seats per position, shaped for an `AskUserQuestion` UI |
+| `picker --name N [--out P]` | Cropped, labeled seat map showing every available seat — the chat-native picker |
 | `preview --seats … [--name N] [--out P]` | Highlight chosen seats on the map |
 | `create-alert --url U --name NAME --seats … [--test-email] [--confirm]` | Fill (and with `--confirm`, submit) a seat alert |
 | `delete-alert [--url U] [--confirm]` | Remove an existing alert (frees a plan slot) |
