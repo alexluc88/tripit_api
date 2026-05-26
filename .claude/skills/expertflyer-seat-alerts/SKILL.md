@@ -88,3 +88,37 @@ Then activate the venv before running commands:
 If ExpertFlyer changes its markup, all selectors live in
 `efalert/selectors.py`. Use `dump-dom` on the relevant page to capture the real
 HTML/elements, then adjust. Run `pytest` for the offline unit tests.
+
+## TODO — accept arbitrary flight input
+
+Today the workflow requires the user to paste a seat-map URL. Add a
+`find-flight` command that accepts looser input and resolves it to a seat-map
+URL (or URLs, one per cabin) automatically. The form at
+`https://www.expertflyer.com/air/seat-map` is the right entry point (free on
+all plans, unlike `/air/status` which is Premium-gated).
+
+Inputs to support, in order of usefulness:
+- `--airline AS --flight 797 [--date YYYY-MM-DD] [--time 6:00am]` — most common
+  ask. Needs origin/destination, which the EF seat-map form requires. Resolve
+  the route by hitting a public source (e.g. `alaskaair.com/status/<num>/<date>`
+  worked for AS) before filling the form. If multiple departures match, list
+  them and ask the user to disambiguate by time.
+- `--from SEA --to LAX --airline AS --flight 797 [--date …]` — direct path,
+  skips the route lookup.
+- `--pnr ABC123` (stretch) — pull route + date from a confirmation code.
+
+Implementation notes (working prototype lives at `out/find_seatmap.py`):
+- Goto `/air/seat-map`. Three autocomplete inputs match
+  `input[id^='autocomplete-']` in DOM order: Departing, Arriving, Airline. Type
+  the value, wait ~700ms, then click the first matching `role=option`.
+- Fill `#departDate` (format `MM/DD/YY`) and `#flightNumber`.
+- Tick at least one cabin checkbox (form requires it). Easiest: try
+  `page.get_by_label("First" | "Business" | "Premium Economy" | "Economy")` and
+  swallow the misses. The resulting URL has `cabinClass=` set to whichever the
+  page decides to show; to get a second cabin, replace that query parameter
+  (`Y` for economy, `D` for first observed on AS) and re-capture.
+- Click the `Search` button; the SPA renders inline (no navigation event), so
+  `wait_for_load_state("networkidle")` + a short timeout is enough. The final
+  `page.url` is the canonical seat-map URL — pass it to `capture_seatmap`.
+- The form rejects submission silently if cabins are missing or the date is in
+  the past; surface a clear error in those cases.
