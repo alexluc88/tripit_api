@@ -54,15 +54,23 @@ Then activate the venv before running commands:
      `python -m efalert seatmap --url "<URL>" --name flight`
    Read `out/flight*.png` (view it) and `out/flight*.json` (every seat: label,
    `available`, `state`, `position` = window/aisle/middle, plus a bounding box).
-3. **Interpret the request.** Map the user's words ("aisle seat near the front",
-   "any premium aisle") to concrete seat labels using `out/flight.json`. Seat
-   *type* (premium/exit) is only visible on AVAILABLE seats; for occupied seats
-   infer the cabin from row ranges and confirm with the user.
-4. **Preview and confirm.** `python -m efalert preview --seats 6C,7C,… --name flight`
+3. **Curate candidates for the user.** Run
+   `python -m efalert candidates --name flight [--cabin Y] [--top 4]` to get
+   the top available seats grouped by `window` / `aisle` / `middle` for each
+   captured cabin. Pre-filter by the user's stated preferences if any
+   ("first-class aisle near the front", "any window") and confirm cabin choice
+   when row ranges alone are ambiguous.
+4. **Let the user pick in chat.** Call `AskUserQuestion` with
+   `multiSelect: true` (max 4 options per question, up to 4 questions). Pattern:
+   one question per cabin/position group, each option = one candidate seat. The
+   option `label` should be `"<seat> (<cabin> · <window|aisle|middle>)"` so the
+   choice is unambiguous. Skip groups that are empty.
+5. **Preview and confirm.** `python -m efalert preview --seats 6C,7C,… --name flight`
    then show `out/preview.png` to the user and get explicit approval.
-5. **Create the alert.** Dry-run first (default), review, then submit:
+6. **Create the alert.** Dry-run first (default), review, then submit:
    `python -m efalert create-alert --url "<URL>" --name "My alert" --seats 6C,7C,… [--test-email]`
-   Add `--confirm` to actually submit.
+   Add `--confirm` to actually submit. Use the URL from
+   `find-flight`'s output for the cabin the chosen seats belong to.
 
 ## Commands
 
@@ -71,6 +79,7 @@ Then activate the venv before running commands:
 | `login [--force]` | Authenticate, cache session |
 | `find-flight --airline X --flight N [--date YYYY-MM-DD] [--from/--to] [--name N] [--no-capture]` | Resolve a flight to seat-map URL(s) and capture each cabin |
 | `seatmap --url U [--name N]` | Screenshot + legend + structured seats |
+| `candidates --name N [--cabin C] [--top K]` | Top available seats per position, shaped for an `AskUserQuestion` UI |
 | `preview --seats … [--name N] [--out P]` | Highlight chosen seats on the map |
 | `create-alert --url U --name NAME --seats … [--test-email] [--confirm]` | Fill (and with `--confirm`, submit) a seat alert |
 | `delete-alert [--url U] [--confirm]` | Remove an existing alert (frees a plan slot) |

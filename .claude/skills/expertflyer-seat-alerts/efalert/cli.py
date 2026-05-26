@@ -143,6 +143,33 @@ def cmd_find_flight(args, settings: Settings) -> int:
     return 0
 
 
+def cmd_candidates(args, settings: Settings) -> int:
+    """Curate available seats into a chat-UI-friendly shape (window/aisle/middle)."""
+    from .candidates import load_and_select
+
+    paths: list[Path] = []
+    if args.cabin:
+        paths.append(settings.out_dir / f"{args.name}_{args.cabin}.json")
+    else:
+        # Auto-discover: <name>.json, <name>_*.json
+        single = settings.out_dir / f"{args.name}.json"
+        if single.exists():
+            paths.append(single)
+        paths.extend(sorted(settings.out_dir.glob(f"{args.name}_*.json")))
+    if not paths:
+        raise SystemExit(
+            f"No seat-map JSON found for name={args.name!r} in {settings.out_dir}. "
+            "Run `find-flight` or `seatmap` first."
+        )
+    payload: dict[str, dict] = {}
+    for p in paths:
+        # Tag each set with the cabin code parsed from the filename (or "default").
+        cabin = p.stem[len(args.name) + 1:] if p.stem != args.name else "default"
+        payload[cabin] = load_and_select(p, top_k=args.top)
+    _emit({"name": args.name, "cabins": payload})
+    return 0
+
+
 def cmd_dump_dom(args, settings: Settings) -> int:
     """Save HTML + screenshot + interactive-element inventory for selector tuning."""
     from .auth import login
@@ -222,6 +249,15 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--no-capture", action="store_true",
                     help="Only resolve the URL(s); skip the seat-map capture step")
     sp.set_defaults(func=cmd_find_flight)
+
+    sp = sub.add_parser(
+        "candidates",
+        help="Curate top available seats per position from a captured seat map",
+    )
+    sp.add_argument("--name", default="flight", help="Basename used by find-flight/seatmap")
+    sp.add_argument("--cabin", help="Cabin letter to read (default: all captured cabins)")
+    sp.add_argument("--top", type=int, default=4, help="Top-K per position (default 4)")
+    sp.set_defaults(func=cmd_candidates)
 
     sp = sub.add_parser("dump-dom", help="Save HTML/screenshot/elements of a page for tuning")
     sp.add_argument("--url", required=True)

@@ -35,6 +35,14 @@ def test_parser_find_flight():
     assert args.no_capture is False
 
 
+def test_parser_candidates_defaults():
+    args = build_parser().parse_args(["candidates", "--name", "as797"])
+    assert args.command == "candidates"
+    assert args.name == "as797"
+    assert args.cabin is None
+    assert args.top == 4
+
+
 def test_parser_find_flight_with_route():
     args = build_parser().parse_args(
         ["find-flight", "--airline", "AS", "--flight", "797",
