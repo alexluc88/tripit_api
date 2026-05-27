@@ -97,6 +97,96 @@ def cmd_delete_alert(args, settings: Settings) -> int:
     return 0
 
 
+def cmd_find_flight(args, settings: Settings) -> int:
+    from datetime import date as DateType
+    from .auth import login
+    from .browser import open_session
+    from .find_flight import Route, find_seatmap_urls, lookup_route
+    from .seatmap import capture_seatmap
+
+    if (args.from_ is None) != (args.to is None):
+        raise SystemExit("--from and --to must be given together.")
+    when = DateType.fromisoformat(args.date) if args.date else DateType.today()
+
+    with open_session(settings) as session:
+        login(session)
+        if args.from_ and args.to:
+            route = Route(origin=args.from_.upper(), destination=args.to.upper())
+        else:
+            route = lookup_route(session, args.airline, args.flight, when)
+        urls = find_seatmap_urls(
+            session,
+            origin=route.origin, destination=route.destination,
+            airline=args.airline, flight=args.flight, when=when,
+        )
+        captures: dict[str, dict] = {}
+        if not args.no_capture:
+            for cabin, url in urls.items():
+                data = capture_seatmap(
+                    session, url, settings.out_dir,
+                    name=f"{args.name}_{cabin}",
+                )
+                captures[cabin] = {
+                    "screenshot": data["screenshot"],
+                    "seats_json": str(settings.out_dir / f"{args.name}_{cabin}.json"),
+                    "seat_count": len(data["seats"]),
+                    "available": data["summary"].get("available", 0),
+                }
+    _emit({
+        "route": {"origin": route.origin, "destination": route.destination},
+        "date": when.isoformat(),
+        "airline": args.airline.upper(),
+        "flight": args.flight,
+        "urls": urls,
+        "captures": captures,
+    })
+    return 0
+
+
+def cmd_picker(args, settings: Settings) -> int:
+    """Render the website's seat map with every available seat outlined + labeled."""
+    from .preview import render_picker
+
+    seatmap_json = args.seatmap or (settings.out_dir / f"{args.name}.json")
+    out = args.out or (settings.out_dir / f"{args.name}_picker.png")
+    report = render_picker(seatmap_json, out)
+    _emit(report)
+    return 0
+
+
+def cmd_candidates(args, settings: Settings) -> int:
+    """Curate available seats into a chat-UI-friendly shape (window/aisle/middle)."""
+    from .candidates import load_and_select
+
+    paths: list[Path] = []
+    if args.cabin:
+        paths.append(settings.out_dir / f"{args.name}_{args.cabin}.json")
+    else:
+        single = settings.out_dir / f"{args.name}.json"
+        if single.exists():
+            paths.append(single)
+        paths.extend(sorted(settings.out_dir.glob(f"{args.name}_*.json")))
+    if not paths:
+        raise SystemExit(
+            f"No seat-map JSON found for name={args.name!r} in {settings.out_dir}. "
+            "Run `find-flight` or `seatmap` first."
+        )
+
+    positions = tuple(p.strip() for p in args.positions.split(",")) if args.positions else None
+    seat_types = tuple(t.strip() for t in args.types.split(",")) if args.types else None
+
+    payload: dict[str, dict] = {}
+    for p in paths:
+        cabin = p.stem[len(args.name) + 1:] if p.stem != args.name else "default"
+        payload[cabin] = load_and_select(
+            p, top_k=args.top,
+            positions=positions, seat_types=seat_types,
+            only_available=not args.include_occupied,
+        )
+    _emit({"name": args.name, "cabins": payload})
+    return 0
+
+
 def cmd_dump_dom(args, settings: Settings) -> int:
     """Save HTML + screenshot + interactive-element inventory for selector tuning."""
     from .auth import login
@@ -162,6 +252,45 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--confirm", action="store_true",
                     help="Actually delete (default only locates the control + screenshots)")
     sp.set_defaults(func=cmd_delete_alert)
+
+    sp = sub.add_parser(
+        "find-flight",
+        help="Resolve a flight by airline+number to seat-map URL(s) and capture them",
+    )
+    sp.add_argument("--airline", required=True, help="Airline IATA code, e.g. AS")
+    sp.add_argument("--flight", required=True, help="Flight number, e.g. 797")
+    sp.add_argument("--date", help="Departure date YYYY-MM-DD (default: today)")
+    sp.add_argument("--from", dest="from_", help="Origin IATA code (skips route lookup)")
+    sp.add_argument("--to", help="Destination IATA code (skips route lookup)")
+    sp.add_argument("--name", default="flight", help="Output basename")
+    sp.add_argument("--no-capture", action="store_true",
+                    help="Only resolve the URL(s); skip the seat-map capture step")
+    sp.set_defaults(func=cmd_find_flight)
+
+    sp = sub.add_parser(
+        "picker",
+        help="Annotate a captured seat map: outline every available seat with its label",
+    )
+    sp.add_argument("--name", default="seatmap", help="Basename of the seatmap capture")
+    sp.add_argument("--seatmap", help="Path to seatmap.json (defaults to out/<name>.json)")
+    sp.add_argument("--out", help="Output image path (defaults to out/<name>_picker.png)")
+    sp.set_defaults(func=cmd_picker)
+
+    sp = sub.add_parser(
+        "candidates",
+        help="Curate top available seats per position from a captured seat map",
+    )
+    sp.add_argument("--name", default="flight", help="Basename used by find-flight/seatmap")
+    sp.add_argument("--cabin", help="Cabin letter to read (default: all captured cabins)")
+    sp.add_argument("--top", type=int, default=4, help="Top-K per position (default 4)")
+    sp.add_argument("--positions",
+                    help="Comma-separated positions to keep (window,aisle,middle)")
+    sp.add_argument("--types",
+                    help="Comma-separated seat types to keep "
+                         "(standard,premium,paid_premium,exit,accessible)")
+    sp.add_argument("--include-occupied", action="store_true",
+                    help="Include currently-unavailable seats (useful for alert targets)")
+    sp.set_defaults(func=cmd_candidates)
 
     sp = sub.add_parser("dump-dom", help="Save HTML/screenshot/elements of a page for tuning")
     sp.add_argument("--url", required=True)

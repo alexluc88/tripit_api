@@ -22,6 +22,10 @@ class Seat:
     available: bool
     state: str = ""     # raw state from the page, e.g. available/occupied/blocked
     position: str = ""  # window | middle | aisle (filled by classify_positions)
+    aria: str = ""      # full aria-label, used for type detection (premium/exit/etc.)
+    cls: str = ""       # CSS class string, also used for type detection
+    icon: str = ""      # inner SVG class (lucide-*), the primary type signal
+    seat_type: str = "" # standard | premium | exit | paid_premium | accessible | ...
     # Bounding box in screenshot pixels, used for offline preview rendering.
     x: float = 0.0
     y: float = 0.0

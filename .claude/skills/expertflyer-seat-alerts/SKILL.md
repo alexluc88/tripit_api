@@ -43,27 +43,44 @@ Then activate the venv before running commands:
 
 1. **Login** (caches a session cookie):
    `python -m efalert login`
-2. **Capture the seat map.** Ask the user for the seat-map URL (open the flight
-   on expertflyer.com and copy the URL), then:
-   `python -m efalert seatmap --url "<URL>" --name flight`
-   Read `out/flight.png` (view it) and `out/flight.json` (every seat: label,
+2. **Capture the seat map.** Two ways in:
+   - **By flight number** (preferred):
+     `python -m efalert find-flight --airline AS --flight 797 [--date 2026-05-26] [--from SEA --to LAX] --name flight`
+     Resolves the route (Alaska supported automatically; for others pass
+     `--from`/`--to`), drives EF's seat-map form, dedups cabins, and writes
+     `out/flight_<cabin>.{png,json}` for each cabin found (`D`/`F` = First,
+     `C`/`J` = Business, `W` = Premium Economy, `Y` = Economy).
+   - **By URL** (when you already have the EF seat-map link):
+     `python -m efalert seatmap --url "<URL>" --name flight`
+   Read `out/flight*.png` (view it) and `out/flight*.json` (every seat: label,
    `available`, `state`, `position` = window/aisle/middle, plus a bounding box).
-3. **Interpret the request.** Map the user's words ("aisle seat near the front",
-   "any premium aisle") to concrete seat labels using `out/flight.json`. Seat
-   *type* (premium/exit) is only visible on AVAILABLE seats; for occupied seats
-   infer the cabin from row ranges and confirm with the user.
-4. **Preview and confirm.** `python -m efalert preview --seats 6C,7C,… --name flight`
+3. **Show the user a picker.** Run
+   `python -m efalert picker --name flight_<cabin> --out out/<cabin>_picker.png`
+   for each cabin captured. The output is a cropped, upscaled snapshot of the
+   website's own seat layout with every available seat filled blue and labeled
+   in white — the closest chat-native equivalent of EF's clickable seat map.
+   `SendUserFile` the image(s).
+4. **Collect the selection.** Either ask the user to reply with the seat labels
+   they want, or use `AskUserQuestion` with `multiSelect: true` if a short list
+   of curated options helps (use `efalert candidates --name flight` to get the
+   top picks per position). Free-text reply is usually faster when the picker
+   is already on screen.
+5. **Preview and confirm.** `python -m efalert preview --seats 6C,7C,… --name flight`
    then show `out/preview.png` to the user and get explicit approval.
-5. **Create the alert.** Dry-run first (default), review, then submit:
+6. **Create the alert.** Dry-run first (default), review, then submit:
    `python -m efalert create-alert --url "<URL>" --name "My alert" --seats 6C,7C,… [--test-email]`
-   Add `--confirm` to actually submit.
+   Add `--confirm` to actually submit. Use the URL from
+   `find-flight`'s output for the cabin the chosen seats belong to.
 
 ## Commands
 
 | Command | Purpose |
 |---------|---------|
 | `login [--force]` | Authenticate, cache session |
+| `find-flight --airline X --flight N [--date YYYY-MM-DD] [--from/--to] [--name N] [--no-capture]` | Resolve a flight to seat-map URL(s) and capture each cabin |
 | `seatmap --url U [--name N]` | Screenshot + legend + structured seats |
+| `candidates --name N [--cabin C] [--top K]` | Top available seats per position, shaped for an `AskUserQuestion` UI |
+| `picker --name N [--out P]` | Cropped, labeled seat map showing every available seat — the chat-native picker |
 | `preview --seats … [--name N] [--out P]` | Highlight chosen seats on the map |
 | `create-alert --url U --name NAME --seats … [--test-email] [--confirm]` | Fill (and with `--confirm`, submit) a seat alert |
 | `delete-alert [--url U] [--confirm]` | Remove an existing alert (frees a plan slot) |
@@ -88,3 +105,11 @@ Then activate the venv before running commands:
 If ExpertFlyer changes its markup, all selectors live in
 `efalert/selectors.py`. Use `dump-dom` on the relevant page to capture the real
 HTML/elements, then adjust. Run `pytest` for the offline unit tests.
+
+## Future work
+
+- `find-flight` route lookup is implemented for Alaska Airlines (AS) only.
+  Other carriers require `--from`/`--to`. Add carrier-specific scrapers to
+  `efalert/find_flight.py::lookup_route` as needed.
+- A `--pnr ABC123` mode to pull route + date from a booking reference would
+  remove the last manual step.

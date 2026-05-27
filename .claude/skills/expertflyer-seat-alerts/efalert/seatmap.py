@@ -21,6 +21,12 @@ _EXTRACT_JS = r"""
   const scX = window.scrollX, scY = window.scrollY;
   const stateOf = (aria) => (aria && aria.includes(','))
       ? aria.split(',').pop().trim().toLowerCase() : '';
+  const iconOf = (el) => {
+    const svg = el.querySelector('svg');
+    if (!svg) return '';
+    const cls = Array.from(svg.classList).find(c => c.startsWith('lucide-'));
+    return cls ? cls.replace('lucide-', '') : '';
+  };
   const buttons = document.querySelectorAll('button[data-seat-id], [data-seat-id]');
   const out = [];
   if (buttons.length) {
@@ -28,9 +34,11 @@ _EXTRACT_JS = r"""
       const r = el.getBoundingClientRect();
       if (r.width === 0 || r.height === 0) continue;
       const aria = el.getAttribute('aria-label') || '';
+      const cls = (el.className && el.className.toString)
+        ? el.className.toString() : (el.className || '');
       out.push({
         label: (el.getAttribute('data-seat-id') || '').toUpperCase().replace(/\s+/g, ''),
-        state: stateOf(aria), aria,
+        state: stateOf(aria), aria, cls, icon: iconOf(el),
         x: r.left + scX, y: r.top + scY, width: r.width, height: r.height,
       });
     }
@@ -85,6 +93,49 @@ def _is_available(state: str, aria: str) -> bool:
     return False  # unknown = not bookable (conservative for alerts)
 
 
+# EF's seat-map renders each seat as a button with an inner lucide-react SVG.
+# The icon class is the most reliable signal for "what kind of seat is this":
+#   user           -> occupied (carries no extra type info)
+#   x              -> blocked
+#   dot            -> standard available seat
+#   star           -> premium / extra-legroom seat (Main Cabin Extra, Premium Class)
+#   accessibility  -> accessible seat
+#   door-open / door-closed / log-out -> exit-row marker (observed variations)
+# Anything else still available falls back to "standard".
+_ICON_TYPES: dict[str, str] = {
+    "star": "premium",
+    "accessibility": "accessible",
+    "door-open": "exit",
+    "door-closed": "exit",
+    "log-out": "exit",
+    "dollar-sign": "paid",
+    "circle-dollar-sign": "paid",
+}
+# Backstop: aria-label / class tokens, used when the icon is missing or unknown.
+_TYPE_TOKENS: list[tuple[str, tuple[str, ...]]] = [
+    ("paid_premium", ("paid premium",)),
+    ("paid",         ("paid",)),
+    ("premium",      ("premium",)),
+    ("exit",         ("exit row", "exit-row", "exitrow", "exit ")),
+    ("accessible",   ("accessible",)),
+]
+
+
+def _classify_types(seats: list) -> None:
+    for s in seats:
+        icon_type = _ICON_TYPES.get((s.icon or "").lower())
+        if icon_type:
+            s.seat_type = icon_type
+            continue
+        text = f"{s.aria} {s.cls}".lower()
+        for label, tokens in _TYPE_TOKENS:
+            if any(tok in text for tok in tokens):
+                s.seat_type = label
+                break
+        else:
+            s.seat_type = "standard"
+
+
 def capture_seatmap(session: Session, url: str, out_dir: Path, name: str = "seatmap") -> dict:
     """Navigate to a seat-map URL and capture screenshot + legend + seats."""
     page = session.page
@@ -107,9 +158,12 @@ def capture_seatmap(session: Session, url: str, out_dir: Path, name: str = "seat
             label=r["label"], row=row, column=col,
             available=_is_available(r.get("state", ""), r.get("aria", "")),
             state=r.get("state", ""),
+            aria=r.get("aria", ""), cls=r.get("cls", ""),
+            icon=r.get("icon", ""),
             x=r["x"], y=r["y"], width=r["width"], height=r["height"],
         ))
     classify_positions(seats)
+    _classify_types(seats)
 
     # Prefer the page's legend panel; otherwise derive one from observed states.
     legend: list[str] = []
